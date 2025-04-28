@@ -1,1 +1,1 @@
-# main
+# This game is pretty dumb, when i update the code, it breaks the hitboxes and UI so it sometimes works and sometimes doesnt, I am trying to fix this as much as I can and when it is 100% completed, I will make my own website and add this to it
