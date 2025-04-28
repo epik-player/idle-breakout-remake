@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Idle Breakout - Enhanced</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #222;
+      margin-top: 80px;
+    }
+    #topBar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 70px;
+      background: #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+    }
+    #marketplaceToggle, #settingsToggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+    }
+    #marketplaceToggle img, #settingsToggle img {
+      width: 100%;
+      height: 100%;
+    }
+    #scoreLevel {
+      color: white;
+      font-size: 20px;
+      text-align: center;
+      flex-grow: 1;
+    }
+    #marketplace, #settingsMenu {
+      position: fixed;
+      top: 70px;
+      background: #333;
+      padding: 10px;
+      border-radius: 8px;
+      display: none;
+      z-index: 999;
+    }
+    #marketplace {
+      left: 10px;
+      width: 200px;
+    }
+    #settingsMenu {
+      right: 10px;
+      width: 200px;
+    }
+    #marketplace button, #settingsMenu button {
+      width: 100%;
+      margin: 5px 0;
+      padding: 8px;
+      background: #555;
+      color: white;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #devCodeInput {
+      width: 100%;
+      margin-top: 10px;
+      padding: 6px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="topBar">
+  <button id="marketplaceToggle"><img src="https://www.citypng.com/public/uploads/preview/download-store-marketplace-shopping-black-icon-png-701751694972801rt30pstmux.png" alt="Marketplace"></button>
+  <div id="scoreLevel">Score: 0 | Level: 1</div>
+  <button id="settingsToggle"><img src="https://cdn-icons-png.flaticon.com/512/76/76716.png" alt="Settings"></button>
+</div>
+
+<div id="marketplace">
+  <h4>Marketplace</h4>
+  <button onclick="buySpeed()">Buy Speed (+10%) - $<span id="speedPrice">100</span></button>
+  <button onclick="buyPower()">Buy Power (+1) - $<span id="powerPrice">100</span></button>
+  <button onclick="buyBall()">Buy Ball - $<span id="ballPrice">200</span></button>
+</div>
+
+<div id="settingsMenu">
+  <h4>Settings</h4>
+  <button onclick="saveGame()">Save Game</button>
+  <button onclick="loadGame()">Load Game</button>
+  <button onclick="wipeSave()">Wipe Save</button>
+  <input id="devCodeInput" placeholder="Enter Dev Code..." onkeydown="if(event.key==='Enter')handleDevCode()">
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let score = 0;
+let level = 1;
+let ballPower = 1;
+let speedPrice = 100, powerPrice = 100, ballPrice = 200;
+
+let balls = [{ x: 400, y: 550, dx: 4, dy: -4, radius: 10, color: 'white' }];
+let blocks = [];
+
+const blockSize = 40;
+const blockPadding = 8;
+const blockOffsetTop = 30;
+const blockOffsetLeft = 30;
+const blocksPerRow = 10;
+const blocksPerColumn = 8;
+
+function addBlock(c, r) {
+  const totalWidth = blocksPerRow * (blockSize + blockPadding) - blockPadding;
+  const totalHeight = blocksPerColumn * (blockSize + blockPadding) - blockPadding;
+  const offsetX = (canvas.width - totalWidth) / 2;
+  const offsetY = (canvas.height - totalHeight) / 2 - 50;
+  const x = c * (blockSize + blockPadding) + offsetX;
+  const y = r * (blockSize + blockPadding) + offsetY;
+  blocks.push({ x, y, size: blockSize, hp: level, status: 1 });
+}
+
+function generateLevel() {
+  blocks = [];
+  const patterns = ['cross', 'x', 'stripes', 'square', 'triangle', 'checker'];
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+
+  switch (pattern) {
+    case 'cross': for (let c = 0; c < blocksPerRow; c++) for (let r = 0; r < blocksPerColumn; r++) if (c === 5 || r === 4) addBlock(c, r); break;
+    case 'x': for (let c = 0; c < blocksPerRow; c++) for (let r = 0; r < blocksPerColumn; r++) if (c === r || c + r === blocksPerRow - 1) addBlock(c, r); break;
+    case 'stripes': for (let r = 0; r < blocksPerColumn; r++) if (r % 2 === 0) for (let c = 0; c < blocksPerRow; c++) addBlock(c, r); break;
+    case 'square': for (let c = 2; c <= 7; c++) for (let r = 2; r <= 5; r++) addBlock(c, r); break;
+    case 'triangle': const mid = 5; for (let r = 0; r < 6; r++) for (let c = mid - r; c <= mid + r; c++) if (c >= 0 && c < blocksPerRow) addBlock(c, r); break;
+    case 'checker': for (let c = 0; c < blocksPerRow; c++) for (let r = 0; r < blocksPerColumn; r++) if ((c + r) % 2 === 0) addBlock(c, r); break;
+  }
+}
+
+function drawBlocks() {
+  for (const b of blocks) {
+    if (b.status === 1) {
+      ctx.fillStyle = '#00BFFF';
+      ctx.fillRect(b.x, b.y, b.size, b.size);
+      ctx.fillStyle = 'white';
+      ctx.font = "14px Arial";
+      ctx.textAlign = 'center';
+      ctx.fillText(b.hp, b.x + b.size / 2, b.y + b.size / 2 + 5);
+    }
+  }
+}
+
+function drawBalls() {
+  for (const ball of balls) {
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fillStyle = ball.color;
+    ctx.fill();
+    ctx.closePath();
+  }
+}
+
+function updateBalls() {
+  for (const ball of balls) {
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    if (ball.x < ball.radius || ball.x > canvas.width - ball.radius) ball.dx *= -1;
+    if (ball.y < ball.radius) ball.dy *= -1;
+    if (ball.y > canvas.height) ball.dy *= -1; // bounce bottom instead of losing ball
+
+    for (const b of blocks) {
+      if (b.status === 1) {
+        const closestX = Math.max(b.x, Math.min(ball.x, b.x + b.size));
+        const closestY = Math.max(b.y, Math.min(ball.y, b.y + b.size));
+        const distance = Math.hypot(ball.x - closestX, ball.y - closestY);
+
+        if (distance < ball.radius) {
+          const overlapX = ball.x - (b.x + b.size / 2);
+          const overlapY = ball.y - (b.y + b.size / 2);
+
+          if (Math.abs(overlapX) > Math.abs(overlapY)) {
+            ball.dx *= -1;
+          } else {
+            ball.dy *= -1;
+          }
+
+          b.hp -= ballPower;
+          if (b.hp <= 0) {
+            b.status = 0;
+            score += level;
+          }
+        }
+      }
+    }
+  }
+
+  if (blocks.every(b => b.status === 0)) {
+    level++;
+    setTimeout(() => {
+      resetBalls();
+      generateLevel();
+    }, 300);
+  }
+}
+
+function resetBalls() {
+  balls.forEach(ball => {
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height - 50;
+    ball.dx = (Math.random() * 4 + 2) * (Math.random() < 0.5 ? -1 : 1);
+    ball.dy = -4;
+  });
+}
+
+function drawUI() {
+  document.getElementById('scoreLevel').textContent = `Score: ${Math.floor(score)} | Level: ${level}`;
+  document.getElementById('speedPrice').textContent = speedPrice;
+  document.getElementById('powerPrice').textContent = powerPrice;
+  document.getElementById('ballPrice').textContent = ballPrice;
+}
+
+function buySpeed() {
+  if (score >= speedPrice) {
+    balls.forEach(b => {
+      b.dx *= 1.1;
+      b.dy *= 1.1;
+    });
+    score -= speedPrice;
+    speedPrice = Math.round(speedPrice * 1.25);
+  }
+}
+
+function buyPower() {
+  if (score >= powerPrice) {
+    ballPower++;
+    score -= powerPrice;
+    powerPrice = Math.round(powerPrice * 1.25);
+  }
+}
+
+function buyBall() {
+  if (score >= ballPrice) {
+    balls.push({
+      x: 400,
+      y: 550,
+      dx: (Math.random() * 6 - 3) || 2,
+      dy: -4,
+      radius: 10,
+      color: 'white'
+    });
+    score -= ballPrice;
+    ballPrice = Math.round(ballPrice * 1.25);
+  }
+}
+
+function saveGame() {
+  const data = { score, level, ballPower, speedPrice, powerPrice, ballPrice, balls };
+  localStorage.setItem('idleBreakoutSave', JSON.stringify(data));
+}
+
+function loadGame() {
+  const saved = localStorage.getItem('idleBreakoutSave');
+  if (!saved) return;
+  const data = JSON.parse(saved);
+  score = data.score;
+  level = data.level;
+  ballPower = data.ballPower;
+  speedPrice = data.speedPrice;
+  powerPrice = data.powerPrice;
+  ballPrice = data.ballPrice;
+  balls = data.balls && data.balls.length ? data.balls : [{ x: 400, y: 550, dx: 4, dy: -4, radius: 10, color: 'white' }];
+  generateLevel();
+}
+
+function wipeSave() {
+  localStorage.removeItem('idleBreakoutSave');
+  location.reload();
+}
+
+function handleDevCode() {
+  const code = document.getElementById('devCodeInput').value.toLowerCase();
+  if (code === 'rich') score += 10000;
+  if (code === 'power') ballPower += 10;
+  if (code === 'balls') balls.push({ x: 400, y: 550, dx: 4, dy: -4, radius: 10, color: 'yellow' });
+  document.getElementById('devCodeInput').value = '';
+}
+
+document.getElementById('marketplaceToggle').onclick = () => {
+  const market = document.getElementById('marketplace');
+  market.style.display = market.style.display === 'block' ? 'none' : 'block';
+};
+
+document.getElementById('settingsToggle').onclick = () => {
+  const settings = document.getElementById('settingsMenu');
+  settings.style.display = settings.style.display === 'block' ? 'none' : 'block';
+};
+
+setInterval(saveGame, 3000);
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBlocks();
+  drawBalls();
+  drawUI();
+  updateBalls();
+  requestAnimationFrame(gameLoop);
+}
+
+generateLevel();
+loadGame();
+gameLoop();
+</script>
+
+</body>
+</html>
